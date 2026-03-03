@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sala do Cofre — Palavra-chave</title>
+  <style>
+    :root{
+      --ink:#e9eefc;
+      --muted:#a7b0d6;
+      --gold:#c9a66b;
+      --good:#5ff0a0;
+      --bad:#ff6b6b;
+
+      --shadow: rgba(0,0,0,.6);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      overflow:hidden;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 900px at 50% 15%, rgba(255,255,255,.05), rgba(0,0,0,0) 60%),
+        radial-gradient(900px 700px at 20% 75%, rgba(70,90,160,.10), rgba(0,0,0,0) 55%),
+        radial-gradient(900px 700px at 80% 80%, rgba(120,60,150,.08), rgba(0,0,0,0) 55%),
+        linear-gradient(180deg, #070911, #05050b);
+    }
+
+    /* “SALA” — pedra */
+    .room{
+      position:fixed; inset:0;
+      display:grid;
+      grid-template-rows: 1fr auto;
+      align-items:end;
+      justify-items:center;
+      padding: min(4vh, 44px) 18px 18px;
+      gap: 14px;
+    }
+    .stone{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(1200px 900px at 50% 10%, rgba(255,255,255,.08), rgba(0,0,0,0) 62%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.015), rgba(255,255,255,.015) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 7px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.012), rgba(255,255,255,.012) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 9px);
+      opacity:.65;
+      mix-blend-mode: overlay;
+      pointer-events:none;
+    }
+    .vignette{
+      position:absolute; inset:-2px;
+      background: radial-gradient(1200px 900px at 50% 35%, rgba(0,0,0,0), rgba(0,0,0,.75) 70%);
+      pointer-events:none;
+    }
+
+    /* Partículas de tinta (canvas por cima de tudo) */
+    #inkCanvas{
+      position:fixed; inset:0;
+      pointer-events:none;
+      z-index: 40;
+    }
+
+    /* Cabeçalho / ambiente (discreto) */
+    .hud{
+      position:absolute;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      display:flex;
+      justify-content:space-between;
+      gap: 12px;
+      pointer-events:none;
+      z-index: 30;
+    }
+    .tag{
+      pointer-events:none;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.30);
+      color: rgba(255,255,255,.86);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    .dot{
+      width:8px;height:8px;border-radius:50%;
+      background: var(--bad);
+      box-shadow: 0 0 0 4px rgba(255,107,107,.12);
+    }
+    .tag.good .dot{
+      background: var(--good);
+      box-shadow: 0 0 0 4px rgba(95,240,160,.14);
+    }
+
+    /* =========================
+       COFRE GIGANTE (centro)
+       ========================= */
+    .vaultStage{
+      width: min(1180px, 96vw);
+      height: min(680px, 68vh);
+      display:grid;
+      place-items:center;
+      perspective: 1400px;
+      position:relative;
+      z-index: 10;
+    }
+
+    .vault{
+      width: 100%;
+      height: 100%;
+      position:relative;
+      transform-style: preserve-3d;
+      filter: drop-shadow(0 38px 90px rgba(0,0,0,.68));
+    }
+
+    /* Arco / moldura de pedra por trás do cofre */
+    .arch{
+      position:absolute;
+      inset: 6% 10% 10% 10%;
+      border-radius: 42px;
+      background:
+        radial-gradient(1200px 520px at 50% 10%, rgba(255,255,255,.06), rgba(0,0,0,0) 60%),
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.28));
+      border: 1px solid rgba(255,255,255,.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+      transform: translateZ(-40px);
+      opacity:.85;
+    }
+    .arch::before{
+      content:"";
+      position:absolute; inset: 14px;
+      border-radius: 34px;
+      border: 1px solid rgba(255,255,255,.07);
+      background:
+        repeating-linear-gradient(90deg, rgba(255,255,255,.016), rgba(255,255,255,.016) 18px, rgba(0,0,0,.02) 18px, rgba(0,0,0,.02) 36px),
+        linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.30));
+      box-shadow: inset 0 18px 60px rgba(0,0,0,.35);
+    }
+
+    /* Corpo (estrutura onde as portas encaixam) */
+    .frame{
+      position:absolute;
+      inset: 14% 12% 18% 12%;
+      border-radius: 30px;
+      background:
+        radial-gradient(900px 360px at 50% 8%, rgba(255,255,255,.12), rgba(0,0,0,0) 60%),
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.36));
+      border: 2px solid rgba(255,255,255,.10);
+      box-shadow:
+        inset 0 2px 0 rgba(255,255,255,.08),
+        inset 0 -28px 88px rgba(0,0,0,.62);
+      overflow:hidden;
+    }
+
+    /* Interior (atrás das portas) */
+    .inside{
+      position:absolute;
+      inset: 8% 8% 10% 8%;
+      border-radius: 22px;
+      background:
+        radial-gradient(900px 420px at 50% 35%, rgba(122,162,255,.12), rgba(0,0,0,0) 62%),
+        linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.90));
+      border: 1px solid rgba(255,255,255,.10);
+      box-shadow: inset 0 2px 18px rgba(0,0,0,.68);
+
+      display:grid;
+      grid-template-rows: auto minmax(0, 1fr) auto; /* <-- IMPORTANTE */
+      gap: 10px;
+      align-items:center;
+      justify-items:center;
+
+      opacity: 0;
+      transition: opacity .5s ease;
+    }
+
+    .reveal{
+      width: 92%;
+      height: 100%;                 /* <-- ocupa o 1fr todo */
+      min-height: 0;                /* <-- evita cortes em grid */
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.25);
+      box-shadow: 0 18px 60px rgba(0,0,0,.58);
+      overflow:hidden;
+      display:grid;
+      place-items:center;
+    }
+
+    .reveal img{
+      width: 100%;
+      height: 100%;
+      object-fit: contain;          /* <-- mostra a imagem toda */
+      object-position: center;
+      opacity: 0;
+      transform: scale(0.98);
+      transition: opacity .55s ease, transform .55s ease;
+    }
+
+    .runes{
+      width: 92%;
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding-bottom: 6px;
+    }
+    .rune{
+      border-radius: 16px;
+      border: 1px solid rgba(201,166,107,.28);
+      background:
+        radial-gradient(160px 120px at 35% 30%, rgba(255,255,255,.12), rgba(0,0,0,.55)),
+        linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.32));
+      height: 64px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap: 10px;
+      color: rgba(255,255,255,.90);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity .55s ease, transform .55s ease;
+    }
+    .rune b{
+      font-family: var(--mono);
+      letter-spacing: .8px;
+      font-size: 12px;
+      color: rgba(201,166,107,.95);
+    }
+    .rune span{
+      font-family: var(--mono);
+      font-size: 18px;
+    }
+
+    /* Portas (abrem para os lados) */
+    .door{
+      position:absolute;
+      top: 0; bottom: 0;
+      width: 50%;
+      border-radius: 28px;
+      background:
+        radial-gradient(700px 320px at 50% 10%, rgba(255,255,255,.14), rgba(0,0,0,0) 60%),
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.38)),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.02), rgba(255,255,255,.02) 16px, rgba(0,0,0,.02) 16px, rgba(0,0,0,.02) 34px);
+      border: 2px solid rgba(255,255,255,.11);
+      box-shadow:
+        inset 0 2px 0 rgba(255,255,255,.08),
+        inset 0 -18px 54px rgba(0,0,0,.58);
+      overflow:hidden;
+      transform-style: preserve-3d;
+      transition: transform 1.05s cubic-bezier(.2,.9,.15,1);
+    }
+    .door::before{
+      content:"";
+      position:absolute; inset: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+      background:
+        radial-gradient(420px 220px at 50% 18%, rgba(201,166,107,.10), rgba(0,0,0,0) 62%),
+        linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,.26));
+    }
+
+    /* Rebites nas portas */
+    .rivetsDoor{ position:absolute; inset:0; pointer-events:none; opacity:.95; }
+    .rivet{ position:absolute; width:12px; height:12px; border-radius:50%;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.22), rgba(0,0,0,.60));
+      border:1px solid rgba(255,255,255,.10);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+
+    .doorLeft{ left:0; transform-origin: 0% 50%; }
+    .doorRight{ right:0; transform-origin: 100% 50%; }
+
+    /* “Fecho” central que separa as portas */
+    .seal{
+      position:absolute;
+      left:50%; top:50%;
+      transform: translate(-50%,-50%);
+      width: 160px;
+      height: 170px;
+      border-radius: 18px;
+      background:
+        radial-gradient(160px 160px at 40% 30%, rgba(255,255,255,.18), rgba(0,0,0,.62)),
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.30));
+      border: 2px solid rgba(201,166,107,.40);
+      box-shadow: 0 22px 48px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.10);
+      display:grid;
+      place-items:center;
+      z-index: 8;
+      transition: box-shadow .4s ease, border-color .4s ease;
+      pointer-events:none;
+    }
+    .seal::before{
+      content:"ᛟ ᚾ ᛟ ᛋ ᛁ ᛚ ᛖ ᚾ ᛁ ᛟ";
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: rgba(201,166,107,.92);
+      position:absolute;
+      top: 10px;
+      opacity:.95;
+    }
+    .sigil{
+      width: 82px; height: 82px;
+      border-radius: 20px;
+      border:1px solid rgba(201,166,107,.35);
+      background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.16), rgba(0,0,0,.62));
+      display:grid;
+      place-items:center;
+      font-family: var(--mono);
+      font-size: 22px;
+      color: rgba(233,238,252,.92);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+      transition: color .4s ease, border-color .4s ease;
+    }
+
+    /* estado aberto */
+    .vault.open .doorLeft{ transform: translateX(-112%) rotateY(14deg); }
+    .vault.open .doorRight{ transform: translateX(112%) rotateY(-14deg); }
+    .vault.open .inside{ opacity: 1; }
+    .vault.open .reveal img{ opacity: 1; transform: scale(1.0); }
+    .vault.open .rune{ opacity: 1; transform: translateY(0); }
+    .vault.open .seal{
+      border-color: rgba(95,240,160,.38);
+      box-shadow:
+        0 22px 48px rgba(0,0,0,.55),
+        0 0 0 10px rgba(95,240,160,.08),
+        inset 0 1px 0 rgba(255,255,255,.10);
+    }
+    .vault.open .sigil{
+      color: rgba(95,240,160,.95);
+      border-color: rgba(95,240,160,.35);
+    }
+
+    /* falha: shake “peso” */
+    @keyframes heavyShake{
+      0%{ transform: translateX(0) }
+      18%{ transform: translateX(-12px) }
+      36%{ transform: translateX(10px) }
+      54%{ transform: translateX(-7px) }
+      72%{ transform: translateX(5px) }
+      100%{ transform: translateX(0) }
+    }
+    .vault.shake{ animation: heavyShake .42s ease; }
+
+    /* glow discreto quando quase a abrir (opcional) */
+    .glow{
+      position:absolute;
+      inset: 18% 18% 24% 18%;
+      pointer-events:none;
+      background: radial-gradient(520px 280px at 50% 60%, rgba(95,240,160,.18), rgba(0,0,0,0) 62%);
+      opacity: 0;
+      transition: opacity .5s ease;
+      z-index: 6;
+    }
+    .vault.open .glow{ opacity: 1; }
+
+    /* =========================
+       ALTAR (bottom UI)
+       ========================= */
+    .altar{
+      width:min(1180px, 96vw);
+      border-radius: 22px;
+      border:1px solid rgba(255,255,255,.10);
+      background:
+        radial-gradient(900px 260px at 50% 0%, rgba(255,255,255,.06), rgba(0,0,0,0) 60%),
+        rgba(0,0,0,.26);
+      box-shadow: 0 22px 80px rgba(0,0,0,.55);
+      padding: 14px 14px 12px;
+      z-index: 20;
+    }
+    .inscription{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.08);
+      color: rgba(233,238,252,.92);
+      line-height: 1.35;
+      font-size: 13px;
+    }
+    .inscription b{ color: rgba(201,166,107,.95); }
+
+    .row{
+      margin-top: 12px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    input[type="text"]{
+      flex:1;
+      min-width: 260px;
+      padding: 12px 12px;
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.14);
+      outline:none;
+      background: rgba(0,0,0,.36);
+      color: var(--ink);
+      font-size: 14px;
+    }
+    input[type="text"]::placeholder{ color: rgba(233,238,252,.48); }
+
+    .btn{
+      cursor:pointer;
+      user-select:none;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.36);
+      color: rgba(255,255,255,.92);
+      padding: 12px 14px;
+      border-radius: 16px;
+      font-weight: 850;
+      letter-spacing: .2px;
+      transition: transform .07s ease, border-color .2s ease, background .2s ease;
+    }
+    .btn:hover{ border-color: rgba(201,166,107,.45); background: rgba(201,166,107,.10); }
+    .btn:active{ transform: translateY(1px); }
+
+    .msg{
+      margin-top: 10px;
+      min-height: 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .msg.good{ color: rgba(95,240,160,.95); }
+    .msg.bad{ color: rgba(255,107,107,.95); }
+
+    .keys{
+      margin-top: 8px;
+      display:flex;
+      justify-content:space-between;
+      gap: 10px;
+      flex-wrap:wrap;
+      color: rgba(233,238,252,.58);
+      font-size: 12px;
+    }
+    .keys code{
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 9px;
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.08);
+      color: rgba(255,255,255,.86);
+    }
+
+    @media (max-width: 520px){
+      .vaultStage{ height: 62vh; }
+      .seal{ width: 140px; height: 150px; }
+    }
+    /* ao abrir: remove o brilho/overlay central */
+    .vault.open .glow{ opacity: 0 !important; }
+
+    /* ao abrir: desaparece o fecho central (o bloco do meio) */
+    .vault.open .seal{
+      opacity: 0;
+      transform: translate(-50%,-50%) scale(0.92);
+      transition: opacity .35s ease, transform .35s ease;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="inkCanvas"></canvas>
+
+  <div class="room">
+    <div class="stone"></div>
+    <div class="vignette"></div>
+
+    <div class="hud">
+      <div class="tag"></div>
+      <div id="statusTag" class="tag">
+        <span class="dot"></span>
+        <span id="statusText">Fechado</span>
+      </div>
+    </div>
+
+    <section class="vaultStage" aria-label="Cofre">
+      <div id="vault" class="vault">
+        <div class="arch" aria-hidden="true"></div>
+
+        <div class="frame" aria-hidden="true">
+          <div class="inside" aria-label="Interior do cofre">
+            <div class="tag" style="border-color: rgba(201,166,107,.22); background: rgba(0,0,0,.24);">
+              Conteúdo protegido por runas
+            </div>
+
+            <div class="reveal">
+              <!-- mete a imagem que enviaste na mesma pasta com o nome revelacao.png -->
+              <img id="revealImg" src="revelacao.svg" alt="Revelação" />
+            </div>
+
+            <div class="runes" aria-label="Runas">
+              <div class="rune" style="transition-delay: .05s"><span>❤</span><b>CULPA</b></div>
+              <div class="rune" style="transition-delay: .12s"><span>✖</span><b>SILÊNCIO</b></div>
+              <div class="rune" style="transition-delay: .19s"><span>⚔</span><b>TRAIÇÃO</b></div>
+              <div class="rune" style="transition-delay: .26s"><span>👁</span><b>VERDADE</b></div>
+            </div>
+          </div>
+
+          <div class="glow" aria-hidden="true"></div>
+
+          <div class="door doorLeft" aria-hidden="true">
+            <div class="rivetsDoor" id="rivetsL"></div>
+          </div>
+
+          <div class="door doorRight" aria-hidden="true">
+            <div class="rivetsDoor" id="rivetsR"></div>
+          </div>
+
+          <div class="seal" aria-hidden="true">
+            <div class="sigil" id="sigil">⟡</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="altar" aria-label="Altar de pedra">
+      <div class="inscription">
+        <div>
+          <b>Base do altar:</b> “A palavra certa abre aquilo que não deve ser esquecido.”
+        </div>
+        <div class="tag">Pena &amp; Tinta</div>
+      </div>
+
+      <div class="row">
+        <input id="answer" type="text" placeholder="Escreve a frase no altar…" autocomplete="off" />
+        <button id="tryBtn" class="btn">Tentar</button>
+        <button id="resetBtn" class="btn" title="Re-selar o cofre">Reset</button>
+      </div>
+
+      <div id="msg" class="msg"></div>
+
+      <div class="keys">
+        <div>Enter = tentar · <code>Esc</code> = limpar</div>
+        <div>Partículas de tinta surgem a cada letra.</div>
+      </div>
+    </section>
+  </div>
+
+<script>
+  // =============================
+  // CONFIG
+  // =============================
+  const ACCEPTED = [
+    "o sino protege o silencio",
+    "o sino protege o silêncio"
+  ];
+
+  function normalize(s){
+    return (s || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[“”"']/g, "")
+      .replace(/[.,;:!?]+$/g, "")
+      .replace(/\s+/g, " ");
+  }
+  function isCorrect(input){
+    const n = normalize(input);
+    return ACCEPTED.some(a => normalize(a) === n);
+  }
+
+  // =============================
+  // UI
+  // =============================
+  const vault = document.getElementById("vault");
+  const answer = document.getElementById("answer");
+  const tryBtn = document.getElementById("tryBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const msg = document.getElementById("msg");
+  const statusText = document.getElementById("statusText");
+  const statusTag = document.getElementById("statusTag");
+  const sigil = document.getElementById("sigil");
+
+  let opened = false;
+
+  function setMessage(text, kind){
+    msg.textContent = text || "";
+    msg.classList.remove("good","bad");
+    if(kind) msg.classList.add(kind);
+  }
+  function setStatus(open){
+    statusText.textContent = open ? "Aberto" : "Fechado";
+    statusTag.classList.toggle("good", open);
+    sigil.textContent = open ? "✦" : "⟡";
+  }
+
+  function shakeVault(){
+    vault.classList.remove("shake");
+    void vault.offsetWidth;
+    vault.classList.add("shake");
+  }
+
+  // “som” simples (sem ficheiros) — vibração/rumble e um “ding” leve
+  let audioCtx = null;
+  function beep(type){
+    try{
+      audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      const f = (type === "open") ? 220 : 90;
+      o.type = "sine";
+      o.frequency.setValueAtTime(f, t0);
+
+      // envelope
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(type === "open" ? 0.18 : 0.12, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + (type === "open" ? 0.6 : 0.25));
+
+      o.connect(g).connect(audioCtx.destination);
+      o.start(t0);
+      o.stop(t0 + (type === "open" ? 0.65 : 0.28));
+
+      // “ding” extra ao abrir
+      if(type === "open"){
+        const o2 = audioCtx.createOscillator();
+        const g2 = audioCtx.createGain();
+        o2.type = "triangle";
+        o2.frequency.setValueAtTime(880, t0 + 0.05);
+        g2.gain.setValueAtTime(0.0001, t0 + 0.05);
+        g2.gain.exponentialRampToValueAtTime(0.12, t0 + 0.07);
+        g2.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.38);
+        o2.connect(g2).connect(audioCtx.destination);
+        o2.start(t0 + 0.05);
+        o2.stop(t0 + 0.4);
+      }
+    }catch(e){}
+  }
+
+  function openVault(){
+    opened = true;
+    vault.classList.add("open");
+    setStatus(true);
+    setMessage("✅ As runas alinham-se… as portas deslizam e o cofre revela o segredo.", "good");
+    beep("open");
+    answer.blur();
+  }
+
+  function attempt(){
+    if(opened){
+      setMessage("O cofre já está aberto.", "good");
+      return;
+    }
+    const v = answer.value;
+    if(!v.trim()){
+      setMessage("A pena arranha a pedra… mas não há palavra.", "bad");
+      shakeVault(); beep("fail");
+      return;
+    }
+    if(isCorrect(v)){
+      openVault();
+    }else{
+      setMessage("❌ A selagem resiste. A sala parece ficar mais fria.", "bad");
+      shakeVault(); beep("fail");
+    }
+  }
+
+  function reset(){
+    opened = false;
+    vault.classList.remove("open","shake");
+    answer.value = "";
+    setStatus(false);
+    setMessage("A sala aguarda. Escreve a frase no altar.", null);
+    answer.focus();
+  }
+
+  tryBtn.addEventListener("click", attempt);
+  resetBtn.addEventListener("click", reset);
+  answer.addEventListener("keydown", (e)=>{
+    if(e.key === "Enter") attempt();
+    if(e.key === "Escape"){ answer.value=""; setMessage("", null); }
+  });
+
+  // =============================
+  // Rebites (visual) para “peso”
+  // =============================
+  function addDoorRivets(el){
+    const pts = [];
+    // borda
+    for(let x=12; x<=88; x+=9) pts.push([x, 14], [x, 86]);
+    for(let y=22; y<=78; y+=11) pts.push([14, y], [86, y]);
+    // interior
+    for(let x=24; x<=76; x+=13) pts.push([x, 32], [x, 68]);
+
+    pts.forEach(([x,y])=>{
+      const d = document.createElement("div");
+      d.className = "rivet";
+      d.style.left = `calc(${x}% - 6px)`;
+      d.style.top  = `calc(${y}% - 6px)`;
+      el.appendChild(d);
+    });
+  }
+  addDoorRivets(document.getElementById("rivetsL"));
+  addDoorRivets(document.getElementById("rivetsR"));
+
+  // =============================
+  // Partículas de tinta (Canvas)
+  // - surgem no input a cada letra
+  // =============================
+  const canvas = document.getElementById("inkCanvas");
+  const ctx = canvas.getContext("2d");
+
+  function resize(){
+    canvas.width = Math.floor(window.innerWidth * devicePixelRatio);
+    canvas.height = Math.floor(window.innerHeight * devicePixelRatio);
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  const particles = [];
+  function spawnInkBurst(x, y){
+    const n = 10 + Math.floor(Math.random()*10);
+    for(let i=0;i<n;i++){
+      const ang = Math.random()*Math.PI*2;
+      const sp = 0.6 + Math.random()*2.2;
+      particles.push({
+        x, y,
+        vx: Math.cos(ang)*sp,
+        vy: Math.sin(ang)*sp - (0.8 + Math.random()*1.2),
+        r: 1.2 + Math.random()*3.2,
+        life: 0,
+        max: 36 + Math.random()*32,
+        drip: Math.random() < 0.22
+      });
+    }
+  }
+
+  function tick(){
+    // Mantém sempre transparente
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.life++;
+
+      // física
+      p.vy += 0.08;
+      p.vx *= 0.985;
+      p.x += p.vx;
+      p.y += p.vy;
+
+      if(p.drip && p.life > 10) p.vy += 0.10;
+
+      const t = p.life / p.max;
+      const alpha = Math.max(0, 1 - t);
+
+      // 1) núcleo de tinta (preto)
+      ctx.save();
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(0,0,0,${0.55*alpha})`;
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      ctx.fill();
+
+      // 2) brilho "molhado" (para aparecer no escuro)
+      ctx.globalCompositeOperation = "screen";
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = `rgba(210,230,255,${0.55*alpha})`;
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(210,230,255,${0.22*alpha})`;
+      ctx.arc(p.x - p.r*0.35, p.y - p.r*0.35, Math.max(1, p.r*0.55), 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+
+      // “fiapo” de tinta (opcional, dá vibe de tinta)
+      if(p.drip && p.life > 8){
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(220,235,255,${0.12*alpha})`;
+        ctx.lineWidth = Math.max(1, p.r*0.6);
+        ctx.moveTo(p.x, p.y - 6);
+        ctx.lineTo(p.x - p.vx*3, p.y - 16);
+        ctx.stroke();
+      }
+
+      if(p.life >= p.max) particles.splice(i,1);
+    }
+
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // partículas ao escrever
+  let lastLen = 0;
+  answer.addEventListener("input", ()=>{
+    const rect = answer.getBoundingClientRect();
+    const caretX = rect.left + Math.min(rect.width-18, 22 + (answer.value.length*7.2));
+    const x = caretX;
+    const y = rect.top + rect.height/2 + (Math.random()*8-4);
+
+    // só spawna quando aumenta (tecla normal)
+    if(answer.value.length > lastLen){
+      spawnInkBurst(x, y);
+    }
+    lastLen = answer.value.length;
+  });
+
+  // init
+  setStatus(false);
+  setMessage("Escreve a frase no altar para mover as portas do cofre.", null);
+  answer.focus();
+</script>
+</body>
+</html>
