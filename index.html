@@ -6,8 +6,8 @@
   <title>Sala do Cofre — Palavra-chave</title>
   <style>
     :root{
-      --ink:#e9eefc;
-      --muted:#a7b0d6;
+      --ink:#141824;
+      --muted:#39425a;
       --gold:#c9a66b;
       --good:#5ff0a0;
       --bad:#ff6b6b;
@@ -25,11 +25,31 @@
       overflow:hidden;
       font-family: var(--sans);
       color: var(--ink);
+
+      /* SALA mais clara: pedra + estantes (fake) */
       background:
-        radial-gradient(1200px 900px at 50% 15%, rgba(255,255,255,.05), rgba(0,0,0,0) 60%),
-        radial-gradient(900px 700px at 20% 75%, rgba(70,90,160,.10), rgba(0,0,0,0) 55%),
-        radial-gradient(900px 700px at 80% 80%, rgba(120,60,150,.08), rgba(0,0,0,0) 55%),
-        linear-gradient(180deg, #070911, #05050b);
+        radial-gradient(1200px 900px at 50% 10%, rgba(255,255,255,.55), rgba(0,0,0,0) 62%),
+
+        /* estantes verticais */
+        repeating-linear-gradient(90deg,
+          rgba(70,52,32,.18) 0px,
+          rgba(70,52,32,.18) 26px,
+          rgba(0,0,0,0) 26px,
+          rgba(0,0,0,0) 78px
+        ),
+
+        /* prateleiras horizontais */
+        repeating-linear-gradient(0deg,
+          rgba(40,28,18,.10) 0px,
+          rgba(40,28,18,.10) 10px,
+          rgba(0,0,0,0) 10px,
+          rgba(0,0,0,0) 64px
+        ),
+
+        /* pedra base */
+        radial-gradient(900px 700px at 25% 70%, rgba(120,130,160,.14), rgba(0,0,0,0) 58%),
+        radial-gradient(900px 700px at 80% 80%, rgba(120,90,70,.12), rgba(0,0,0,0) 55%),
+        linear-gradient(180deg, #c9c2b5, #8f8a81);
     }
 
     /* “SALA” — pedra */
@@ -469,6 +489,9 @@
       transform: translate(-50%,-50%) scale(0.92);
       transition: opacity .35s ease, transform .35s ease;
     }
+    .vignette{
+      background: radial-gradient(1200px 900px at 50% 35%, rgba(0,0,0,0), rgba(0,0,0,.55) 70%);
+    }
   </style>
 </head>
 
@@ -536,7 +559,7 @@
       </div>
 
       <div class="row">
-        <input id="answer" type="text" placeholder="Escreve a frase no altar…" autocomplete="off" />
+        <input id="answer" type="text" placeholder="Escreve a frase no altar…" autocomplete="off" style="color: white;" />
         <button id="tryBtn" class="btn">Tentar</button>
         <button id="resetBtn" class="btn" title="Re-selar o cofre">Reset</button>
       </div>
@@ -767,16 +790,16 @@
       // 1) núcleo de tinta (preto)
       ctx.save();
       ctx.beginPath();
-      ctx.fillStyle = `rgba(0,0,0,${0.55*alpha})`;
+      ctx.fillStyle = `rgba(0,0,0,${0.85*alpha})`;
       ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
       ctx.fill();
 
       // 2) brilho "molhado" (para aparecer no escuro)
-      ctx.globalCompositeOperation = "screen";
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = `rgba(210,230,255,${0.55*alpha})`;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = `rgba(255,255,255,${0.12*alpha})`;
+      ctx.fillStyle = `rgba(255,255,255,${0.10*alpha})`;
       ctx.beginPath();
-      ctx.fillStyle = `rgba(210,230,255,${0.22*alpha})`;
       ctx.arc(p.x - p.r*0.35, p.y - p.r*0.35, Math.max(1, p.r*0.55), 0, Math.PI*2);
       ctx.fill();
       ctx.restore();
